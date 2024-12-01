@@ -1,0 +1,67 @@
+version: 2
+
+includes:
+  - from_file:
+      path: ./.goreleaser.common.yml
+
+nightly:
+  # version_template will override .Version for nightly builds:
+  # https://goreleaser.com/customization/nightlies/#how-it-works
+  version_template: "{{ .FullCommit }}"
+
+archives:
+  - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}"
+    id: sha
+    files:
+      - LICENSE
+    format_overrides:
+      - goos: windows
+        format: zip
+  - name_template: "{{ .ProjectName }}_head_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}"
+    id: head
+    files:
+      - LICENSE
+    format_overrides:
+      - goos: windows
+        format: zip
+
+blobs:
+  - provider: s3
+    ids:
+      - sha
+    region: "{{ .Env.AWS_REGION }}"
+    bucket: "{{ .Env.AWS_BUCKET }}"
+    directory: "dagger/main/{{ .Version }}"
+  - provider: s3
+    ids:
+      - head
+    region: "{{ .Env.AWS_REGION }}"
+    bucket: "{{ .Env.AWS_BUCKET }}"
+    directory: "dagger/main/head"
+
+publishers:
+  - name: publish-install-sh
+    cmd: sh -c "aws s3 cp install.sh s3://{{ .Env.AWS_BUCKET }}/dagger/install.sh"
+    env:
+      - PATH={{ .Env.PATH }}
+      - AWS_EC2_METADATA_DISABLED=true
+      - AWS_ACCESS_KEY_ID={{ .Env.AWS_ACCESS_KEY_ID }}
+      - AWS_SECRET_ACCESS_KEY={{ .Env.AWS_SECRET_ACCESS_KEY }}
+      - AWS_REGION={{ .Env.AWS_REGION }}
+  - name: publish-install-ps1
+    cmd: sh -c "aws s3 cp install.ps1 s3://{{ .Env.AWS_BUCKET }}/dagger/install.ps1"
+    env:
+      - PATH={{ .Env.PATH }}
+      - AWS_EC2_METADATA_DISABLED=true
+      - AWS_ACCESS_KEY_ID={{ .Env.AWS_ACCESS_KEY_ID }}
+      - AWS_SECRET_ACCESS_KEY={{ .Env.AWS_SECRET_ACCESS_KEY }}
+      - AWS_REGION={{ .Env.AWS_REGION }}
+  - name: publish-install-ps1
+    cmd: sh -c "aws cloudfront create-invalidation --distribution-id {{ .Env.AWS_CLOUDFRONT_DISTRIBUTION_ID }} --paths /dagger/install.sh /dagger/install.ps1"
+    env:
+      - PATH={{ .Env.PATH }}
+      - AWS_ACCESS_KEY_ID={{ .Env.AWS_ACCESS_KEY_ID }}
+      - AWS_SECRET_ACCESS_KEY={{ .Env.AWS_SECRET_ACCESS_KEY }}
+      - AWS_REGION={{ .Env.AWS_REGION }}
+      - AWS_SECRET_ACCESS_KEY={{ .Env.AWS_SECRET_ACCESS_KEY }}
+      - AWS_CLOUDFRONT_DISTRIBUTION_ID={{ .Env.AWS_CLOUDFRONT_DISTRIBUTION_ID }}
